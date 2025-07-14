@@ -1,0 +1,19 @@
+# Python 常用忽略
+__pycache__/
+*.pyc
+
+# IDE 文件
+.idea/
+.vscode/
+
+# 模型和大文件（防止再次上传失败）
+*.pt
+*.safetensors
+*.ckpt
+*.bin
+*.zip
+
+# 输出目录
+logs/
+checkpoints/
+runs/
