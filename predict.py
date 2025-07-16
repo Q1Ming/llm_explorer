@@ -1,55 +1,19 @@
-# predict.py
+# predict.py (最终版，支持分类与生成)
+
+import argparse
 import os
 import torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, PreTrainedModel, PreTrainedTokenizer
-from typing import Tuple
+from transformers import AutoTokenizer, AutoModel, AutoConfig, AutoModelForSequenceClassification, AutoModelForCausalLM
 
-# --- 1. 配置常量 ---
-# 使用常量来管理路径，更清晰，易于修改
-SAVED_MODEL_PATH = "sentiment_analyzer"
 
-#加载模型
-def load_trained_model(model_path: str) -> Tuple[PreTrainedModel, PreTrainedTokenizer]:
-    """
-    从本地文件夹加载微调好的模型和分词器。
-    增加了路径存在性检查，使函数更健壮。
-    """
-    if not os.path.isdir(model_path):
-        # 提供更明确的错误信息，指导用户先运行训练脚本
-        raise FileNotFoundError(
-            f"模型目录 '{model_path}' 未找到。 "
-            f"请先运行 'main.py' 来训练并保存模型。"
-        )
-
-    print(f"正在从 '{model_path}' 加载模型和分词器...")
-
-    # 注意：我们现在是从一个本地目录加载，而不是从 Hugging Face Hub 下载
-    model = AutoModelForSequenceClassification.from_pretrained(model_path)
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
-
-    print("加载完成！")
-    return model, tokenizer
-
-#预测情绪
-def predict_sentiment(text: str, model: PreTrainedModel, tokenizer: PreTrainedTokenizer):
-    """
-    使用加载好的模型对单个文本进行情感预测。
-    将模型移动到设备的操作在加载后执行一次即可，无需在每次预测时都执行。
-    """
-    # 确定设备
+def predict_sentiment(text, model, tokenizer):
+    """处理分类任务的预测逻辑。"""
     device = model.device
-
-    # 对输入文本进行分词，并移动到正确的设备
     inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True).to(device)
-
-    # 进行预测，不计算梯度以节省资源
     with torch.no_grad():
         logits = model(**inputs).logits
-
     predicted_class_id = logits.argmax().item()
-
-    # 从模型配置中获取标签名称，这比硬编码更可靠
-    label = model.config.id2label.get(predicted_class_id, "UNKNOWN")
+    label = model.config.id2label.get(predicted_class_id, f"UNKNOWN_ID_{predicted_class_id}")
 
     print(f"文本: '{text}'")
     if label == "POSITIVE":
@@ -60,16 +24,87 @@ def predict_sentiment(text: str, model: PreTrainedModel, tokenizer: PreTrainedTo
         print(f">> 预测结果: {label}")
     print("-" * 30)
 
-#运行交互式会话
-def run_interactive_session(model: PreTrainedModel, tokenizer: PreTrainedTokenizer):
-    """启动一个交互式会话，让用户可以连续输入并获得预测。"""
-    # 将模型移动到设备的操作在这里执行一次
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model.to(device)
-    print(f"模型已移动到设备: {device.upper()}")
 
-    print("\n情感分析预测已就绪。请输入一句话进行分析（输入 'exit' 或 Ctrl+C 退出）：")
+def generate_text(prompt, model, tokenizer):
+    """处理生成任务的创作逻辑。"""
+    device = model.device
+    inputs = tokenizer(prompt, return_tensors="pt").to(device)
 
+    # max_length 控制生成文本的总长度
+    # no_repeat_ngram_size 避免生成重复的短语
+    outputs = model.generate(
+        **inputs,
+        max_length=60,
+        num_return_sequences=1,
+        no_repeat_ngram_size=2,
+        pad_token_id=tokenizer.eos_token_id  # 避免警告
+    )
+    generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+    print(f"输入: '{prompt}'")
+    print(f">> 模型创作:\n{generated_text}")
+    print("-" * 30)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="使用微调好的模型进行推理。")
+    parser.add_argument(
+        "model_path",
+        type=str,
+        help="指定要加载的模型路径 (例如: outputs/sentiment_analyzer)"
+    )
+    args = parser.parse_args()
+
+    if not os.path.isdir(args.model_path):
+        print(f"错误: 模型目录 '{args.model_path}' 未找到。")
+        return
+
+    try:
+        print(f"正在从 '{args.model_path}' 加载模型和分词器...")
+        # 1. 先加载配置，判断模型类型
+        config = AutoConfig.from_pretrained(args.model_path)
+
+        # 2. 根据模型架构中的`architectures`字段来决定加载哪个模型类
+        # 这是最可靠的方法！
+        model_class = config.architectures[0]
+
+        if "ForSequenceClassification" in model_class:
+            print("检测到分类模型，进入情感分析模式...")
+            model = AutoModelForSequenceClassification.from_pretrained(args.model_path)
+            task_type = "classification"
+        elif "ForCausalLM" in model_class:
+            print("检测到生成模型，进入文本创作模式...")
+            model = AutoModelForCausalLM.from_pretrained(args.model_path)
+            task_type = "generation"
+        else:
+            print(f"警告: 未知的模型类型 '{model_class}'。尝试使用 AutoModel 加载。")
+            model = AutoModel.from_pretrained(args.model_path)
+            task_type = "unknown"
+
+        tokenizer = AutoTokenizer.from_pretrained(args.model_path)
+        print("加载完成！")
+
+        # 3. 将模型移动到设备
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model.to(device)
+        print(f"模型已移动到设备: {device.upper()}")
+
+        # 4. 根据任务类型，启动不同的交互会话
+        if task_type == "classification":
+            print("\n情感分析预测已就绪。请输入一句话进行分析（输入 'exit' 或 Ctrl+C 退出）：")
+            run_interactive_loop(predict_sentiment, model, tokenizer)
+        elif task_type == "generation":
+            print("\n文本创作已就绪。请输入开头（prompt）来让模型续写（输入 'exit' 或 Ctrl+C 退出）：")
+            run_interactive_loop(generate_text, model, tokenizer)
+        else:
+            print("无法确定交互模式，程序退出。")
+
+    except Exception as e:
+        print(f"发生了一个意外错误: {e}")
+
+
+def run_interactive_loop(handler_func, model, tokenizer):
+    """一个通用的交互循环。"""
     try:
         while True:
             user_input = input("请输入: ")
@@ -77,19 +112,10 @@ def run_interactive_session(model: PreTrainedModel, tokenizer: PreTrainedTokeniz
                 break
             if not user_input.strip():
                 continue
-
-            predict_sentiment(user_input, model, tokenizer)
+            handler_func(user_input, model, tokenizer)
     except (KeyboardInterrupt, EOFError):
         print("\n再见！")
 
 
 if __name__ == "__main__":
-    try:
-        # 只需加载一次模型
-        trained_model, trained_tokenizer = load_trained_model(SAVED_MODEL_PATH)
-        # 启动交互式会话
-        run_interactive_session(trained_model, trained_tokenizer)
-    except FileNotFoundError as e:
-        print(f"错误: {e}")
-    except Exception as e:
-        print(f"发生了一个意外错误: {e}")
+    main()

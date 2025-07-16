@@ -1,5 +1,4 @@
-# main.py
-import torch
+# train_sentiment_analysis.py
 from datasets import load_dataset
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, TrainingArguments, Trainer
 
@@ -69,26 +68,10 @@ def main():
     trainer.train()
     print("模型微调完成！")
     # 保存最终的模型和分词器
-    output_dir = "sentiment_analyzer"  # 模型保存路径
+    output_dir = "outputs/sentiment_analyzer"  # 模型保存路径
     trainer.save_model(output_dir)
     print(f"最终模型已保存至 '{output_dir}'")
 
-    # 5. 使用微调后的模型进行预测
-    print("\n--- 使用微调后的模型进行预测 ---")
-    text_to_classify = "我喜欢这部电影，太棒了！"
-    inputs = tokenizer(text_to_classify, return_tensors="pt")  # 使用 PyTorch 张量
-
-    # 将输入数据移动到模型所在的设备（CPU 或 GPU）
-    inputs = {k: v.to(model.device) for k, v in inputs.items()}
-
-    with torch.no_grad():  # 在推理时不需要计算梯度
-        logits = model(**inputs).logits
-
-    predicted_class_id = logits.argmax().item()
-    prediction = model.config.id2label[predicted_class_id]
-
-    print(f"文本: '{text_to_classify}'")
-    print(f"预测情感: {'正面 (Positive)' if predicted_class_id == 1 else '负面 (Negative)'}")
 
 
 if __name__ == "__main__":

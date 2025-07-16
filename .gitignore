@@ -15,6 +15,11 @@ __pycache__/
 
 # 输出目录
 logs/
+outputs/
+test_trainer/
+test_trainer_chinese/
+gpt2-chinese-poetry/
+gpt2-chinese-poetry-final/
 checkpoints/
 runs/
 /.venv/
