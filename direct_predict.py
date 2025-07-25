@@ -7,6 +7,8 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 def main():
     """
     直接加载一个预训练的生成模型并进行交互，不经过任何微调。
+    启动命令示例：
+     python direct_predict.py --model_name C:\My\File\Models\Qwen3-0.6B\
     """
     parser = argparse.ArgumentParser(description="直接使用预训练的生成模型进行推理。")
 
