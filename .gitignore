@@ -1,25 +1,29 @@
-# Python 常用忽略
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 
-# IDE 文件
-.idea/
-.vscode/
+# C extensions
+*.so
 
-# 模型和大文件（防止再次上传失败）
-*.pt
-*.safetensors
-*.ckpt
-*.bin
-*.zip
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# 输出目录
-logs/
-outputs/
-test_trainer/
-test_trainer_chinese/
-gpt2-chinese-poetry/
-gpt2-chinese-poetry-final/
-checkpoints/
-runs/
-/.venv/
+# Poetry
+.venv/
+/.lingma/rules/project_rule.md
